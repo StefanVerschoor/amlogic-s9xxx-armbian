@@ -122,11 +122,6 @@ init_var() {
     ROOTFS_UUID="$(cat /proc/sys/kernel/random/uuid)"
     [[ -z "${ROOTFS_UUID}" ]] && ROOTFS_UUID="$(uuidgen)"
     [[ -z "${ROOTFS_UUID}" ]] && error_msg "The new UUID is invalid, cannot continue."
-
-    # Get random macaddr
-    mac_hexchars="0123456789ABCDEF"
-    mac_end="$(for i in {1..6}; do echo -n ${mac_hexchars:$((${RANDOM} % 16)):1}; done | sed -e 's/\(..\)/:\1/g')"
-    random_macaddr="9E:61${mac_end}"
 }
 
 # Set the type of file system
@@ -171,9 +166,12 @@ create_partition() {
     # Clear emmc disk data
     exists_pts="$(parted ${DEV_EMMC} print 2>/dev/null | grep 'primary' | wc -l)"
     if [[ "${exists_pts}" -gt "0" ]]; then
+        echo -e "${INFO} Delete the existing [ ${exists_pts} ] partitions."
         i=1
         while [[ "${i}" -le "${exists_pts}" ]]; do
-            parted -s ${DEV_EMMC} rm ${i} 2>/dev/null
+            umount -f ${DEV_EMMC}p${i} 2>/dev/null
+            parted -s ${DEV_EMMC} rm ${i}
+            [[ "${?}" -eq "0" ]] || error_msg "Failed to delete the [ ${i} ] partition. Please try again."
             let i++
         done
     fi
@@ -194,11 +192,11 @@ create_partition() {
     # Write bootloader
     if [[ -n "${BOOTLOADER_IMG}" && -f "${BOOTLOADER_IMG}" ]] &&
         [[ -n "${MAINLINE_UBOOT}" && -f "${MAINLINE_UBOOT}" ]]; then
-        echo -e "${INFO} 01. Write bootloader: ${MAINLINE_UBOOT}"
+        echo -e "${INFO} 01. Write bootloader: [ ${MAINLINE_UBOOT} ]"
         dd if="${BOOTLOADER_IMG}" of="${DEV_EMMC}" conv=fsync,notrunc bs=8k seek=1
         dd if="${MAINLINE_UBOOT}" of="${DEV_EMMC}" conv=fsync,notrunc bs=8k seek=5
     elif [[ -n "${BOOTLOADER_IMG}" && -f "${BOOTLOADER_IMG}" ]]; then
-        echo -e "${INFO} 02. Write bootloader: ${BOOTLOADER_IMG}"
+        echo -e "${INFO} 02. Write bootloader: [ ${BOOTLOADER_IMG} ]"
         dd if="${BOOTLOADER_IMG}" of="${DEV_EMMC}" conv=fsync,notrunc bs=8k seek=1
     fi
     [[ "${?}" -eq "0" ]] || error_msg "Failed to write bootloader using [ dd ]."
@@ -328,10 +326,7 @@ EOF
     sed -i "s|^BOOT_CONF=.*|BOOT_CONF='${BOOT_CONF}'|g" ${ophub_release_file}
     sed -i "s|^DISK_TYPE=.*|DISK_TYPE='emmc'|g" ${ophub_release_file}
 
-    # Set interfaces macaddr
-    interfaces_file="${DIR_INSTALL}/etc/network/interfaces"
-    [[ -f "${interfaces_file}" ]] && sed -i "s|hwaddress ether.*|hwaddress ether ${random_macaddr}:AA|g" ${interfaces_file}
-
+    # Remove useless scripts
     rm -f ${DIR_INSTALL}/usr/sbin/armbian-tf
 
     sync && sleep 3

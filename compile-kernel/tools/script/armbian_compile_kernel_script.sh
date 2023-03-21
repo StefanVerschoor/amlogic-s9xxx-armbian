@@ -9,8 +9,9 @@
 # https://github.com/ophub/amlogic-s9xxx-armbian
 #
 # Description: Run on Armbian, Compile the kernel.
-# Copyright (C) 2021- https://github.com/unifreq
-# Copyright (C) 2021- https://github.com/ophub/amlogic-s9xxx-armbian
+# Copyright (C) 2021~ https://www.kernel.org
+# Copyright (C) 2021~ https://github.com/unifreq
+# Copyright (C) 2021~ https://github.com/ophub/amlogic-s9xxx-armbian
 #
 # Command: armbian-kernel
 # Command optional parameters please refer to the source code repository
@@ -53,7 +54,7 @@ ophub_release_file="/etc/ophub-release"
 # Set the default for downloading kernel sources from github.com
 repo_owner="unifreq"
 repo_branch="main"
-build_kernel=("6.1.15" "5.15.100")
+build_kernel=("6.1.1" "5.15.1")
 auto_kernel="true"
 custom_name="-ophub"
 # Set the kernel compile object, options: dtbs / all
@@ -185,29 +186,10 @@ toolchain_check() {
     # Download the cross-compilation toolchain: [ clang / gcc ]
     [[ -d "/etc/apt/sources.list.d" ]] || mkdir -p /etc/apt/sources.list.d
     if [[ "${toolchain_name}" == "clang" ]]; then
-        # Set llvm version
-        llvm_version="14"
-        echo -e "${INFO} Start installing the [ llvm: ${llvm_version} ] toolchain..."
-
-        # Add apt source for llvm
-        llvm_toolchain_list="/etc/apt/sources.list.d/llvm-toolchain.list"
-        echo "deb http://apt.llvm.org/${host_release}/ llvm-toolchain-${host_release}-${llvm_version} main" >${llvm_toolchain_list}
-        echo "deb-src http://apt.llvm.org/${host_release}/ llvm-toolchain-${host_release}-${llvm_version} main" >>${llvm_toolchain_list}
-        [[ -s "${llvm_toolchain_list}" ]] || error_msg "failed to add apt source: [ ${llvm_toolchain_list} ]"
-        # Add gpg key for llvm
-        llvm_toolchain_asc="/etc/apt/trusted.gpg.d/llvm-toolchain.asc"
-        curl -sL "https://apt.llvm.org/llvm-snapshot.gpg.key" -o "${llvm_toolchain_asc}"
-        [[ -s "${llvm_toolchain_asc}" ]] || error_msg "failed to add gpg key: [ ${llvm_toolchain_asc} ]"
-
-        # Set up the installation package, refer to the source: https://apt.llvm.org/
-        llvm_pkg="\
-        clang-${llvm_version} lldb-${llvm_version} lld-${llvm_version} clangd-${llvm_version} clang-tidy-${llvm_version} \
-        clang-format-${llvm_version} clang-tools-${llvm_version} llvm-${llvm_version}-dev lld-${llvm_version} lldb-${llvm_version} \
-        llvm-${llvm_version}-tools libomp-${llvm_version}-dev libc++-${llvm_version}-dev libc++abi-${llvm_version}-dev \
-        libclang-common-${llvm_version}-dev libclang-${llvm_version}-dev libclang-dev libunwind-${llvm_version}-dev \
-        "
-        # Install llvm
-        apt-get -qq install -y ${llvm_pkg}
+        # Install LLVM
+        echo -e "${INFO} Start installing the LLVM toolchain..."
+        curl -fsSL https://apt.llvm.org/llvm.sh | bash -s all
+        [[ "${?}" -eq "0" ]] || error_msg "LLVM installation failed."
 
         # Set cross compilation parameters
         export CROSS_COMPILE="aarch64-linux-gnu-"
@@ -220,7 +202,7 @@ toolchain_check() {
         if [[ ! -d "${toolchain_path}/${gun_file//.tar.xz/}/bin" ]]; then
             echo -e "${INFO} Start downloading the ARM GNU toolchain [ ${gun_file} ]..."
             wget -q "${dev_repo}/${gun_file}" -O "${toolchain_path}/${gun_file}"
-            [[ "${?}" -eq "0" ]] || error_msg "GNU toolchain file download failed"
+            [[ "${?}" -eq "0" ]] || error_msg "GNU toolchain file download failed."
             tar -xJf ${toolchain_path}/${gun_file} -C ${toolchain_path}
             rm -f ${toolchain_path}/${gun_file}
             [[ -d "${toolchain_path}/${gun_file//.tar.xz/}/bin" ]] || error_msg "The gcc is not set!"
@@ -624,8 +606,6 @@ echo -e "${INFO} Kernel compilation toolchain: [ ${toolchain_name} ]"
 echo -e "${INFO} Kernel from: [ ${code_owner} ]"
 echo -e "${INFO} Kernel List: [ $(echo ${build_kernel[*]} | xargs) ] \n"
 # Show server start information
-echo -e "${INFO} Server CPU configuration information: \n$(cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c) \n"
-echo -e "${INFO} Server memory usage: \n$(free -h) \n"
 echo -e "${INFO} Server space usage before starting to compile: \n$(df -hT ${current_path}) \n"
 
 # Loop to compile the kernel
